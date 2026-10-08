@@ -82,7 +82,7 @@ jobs:
     timeout-minutes: 300
     defaults:
       run:
-        shell: pwsh   # jeśli nie masz PowerShell 7, zmień na: powershell
+        shell: powershell
     env:
       JOB: "TestComplete%20QA%20tc-ui-automation%20(bareAgent)"
       JURL: "https://qa-automation.dev.testcomplete.com"
