@@ -1,0 +1,93 @@
+name: Jenkins TestComplete
+
+on:
+  workflow_dispatch:
+    inputs:
+      testcomplete_url:
+        description: "Installer URL (e.g. s3://bucket/path/installer.exe)"
+        required: true
+        type: string
+
+jobs:
+  run-tests:
+    # Change to self-hosted if Jenkins is not reachable from the internet.
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      JOB: "TestComplete%20QA%20tc-ui-automation%20(bareAgent)"
+      JU: ${{ secrets.JENKINS_USER }}
+      JT: ${{ secrets.JENKINS_API_TOKEN }}
+      JURL: ${{ secrets.JENKINS_URL }}
+    steps:
+      - name: Trigger Jenkins
+        # Keep input and token out of the shell script's source.
+        env:
+          JOB_TOKEN: ${{ secrets.JENKINS_JOB_TOKEN }}
+          TESTCOMPLETE_URL: ${{ inputs.testcomplete_url }}
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --user "$JU:$JT" \
+            --request POST "$JURL/job/$JOB/buildWithParameters" \
+            --data-urlencode "token=$JOB_TOKEN" \
+            --data-urlencode "TESTCOMPLETE_URL=$TESTCOMPLETE_URL" \
+            --dump-header headers.txt --output /dev/null
+          QUEUE_URL=""
+          while IFS= read -r header; do
+            header="${header%$'\r'}"
+            if [[ "${header,,}" == location:* ]]; then
+              QUEUE_URL="${header#*:}"
+              QUEUE_URL="${QUEUE_URL# }"
+            fi
+          done < headers.txt
+          if [[ -z "$QUEUE_URL" ]]; then
+            echo "Jenkins did not return a queue URL."
+            exit 1
+          fi
+          echo "QUEUE_URL=$QUEUE_URL" >> "$GITHUB_ENV"
+
+      - name: Wait for build to start
+        shell: bash
+        run: |
+          # Allow up to one hour in the Jenkins queue.
+          BUILD_URL=""
+          for attempt in {1..360}; do
+            BUILD_URL=$(curl --fail --silent --show-error --user "$JU:$JT" \
+              "${QUEUE_URL}api/json" | jq -r '.executable.url // empty')
+            if [[ -n "$BUILD_URL" ]]; then
+              echo "BUILD_URL=$BUILD_URL" >> "$GITHUB_ENV"
+              echo "Jenkins build: $BUILD_URL" >> "$GITHUB_STEP_SUMMARY"
+              break
+            fi
+            sleep 10
+          done
+          if [[ -z "$BUILD_URL" ]]; then
+            echo "Jenkins build did not start within one hour."
+            exit 1
+          fi
+
+      - name: Wait for result
+        shell: bash
+        run: |
+          while true; do
+            status=$(curl --fail --silent --show-error --user "$JU:$JT" \
+              "${BUILD_URL}api/json" | jq -r \
+              'if .building then "RUNNING" else (.result // "UNKNOWN") end')
+            echo "$status"
+            if [[ "$status" != "RUNNING" ]]; then
+              if [[ "$status" == "SUCCESS" ]]; then
+                exit 0
+              fi
+              exit 1
+            fi
+            sleep 60
+          done
+
+      - name: Cancel Jenkins build
+        if: cancelled()
+        shell: bash
+        run: |
+          # A build URL is only available after Jenkins starts the build.
+          if [[ -n "${BUILD_URL:-}" ]]; then
+            curl --fail --silent --show-error --user "$JU:$JT" \
+              --request POST "${BUILD_URL}stop" --output /dev/null || true
+          fi
