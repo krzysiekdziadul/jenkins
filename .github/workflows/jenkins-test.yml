@@ -8,6 +8,9 @@ on:
         required: true
         type: string
 
+# Jenkins authentication does not require GitHub token permissions.
+permissions: {}
+
 jobs:
   run-tests:
     # Change to self-hosted if Jenkins is not reachable from the internet.
