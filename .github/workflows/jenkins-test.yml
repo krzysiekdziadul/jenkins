@@ -1,0 +1,63 @@
+name: Jenkins TestComplete
+
+on:
+  workflow_dispatch:
+    inputs:
+      testcomplete_url:
+        required: false
+        default: "https://downloads.smartbear.com/TestComplete1584SLM.exe"
+        type: string
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest   # self-hosted, jeśli Jenkins jest za VPN
+    timeout-minutes: 300
+    env:
+      JOB: "TestComplete%20QA%20tc-ui-automation%20(bareAgent)"
+      JURL: "https://qa-automation.dev.testcomplete.com"
+      JU: "krzysiekdziadul"
+      JT: "1191d1776ef14ee3a03e9ebce05d21b662"
+      JOB_TOKEN: "9#Jtqt8b!CdCp%!$"
+      TESTCOMPLETE_URL: ${{ inputs.testcomplete_url }}
+    steps:
+      - name: Trigger Jenkins
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --user "$JU:$JT" \
+            --request POST "$JURL/job/$JOB/buildWithParameters" \
+            --data-urlencode "token=$JOB_TOKEN" \
+            --data-urlencode "TESTCOMPLETE_URL=$TESTCOMPLETE_URL" \
+            --dump-header headers.txt --output /dev/null
+          QUEUE_URL=$(grep -i '^location:' headers.txt | awk '{print $2}' | tr -d '\r')
+          [ -z "$QUEUE_URL" ] && { echo "No queue URL"; exit 1; }
+          echo "QUEUE_URL=$QUEUE_URL" >> "$GITHUB_ENV"
+
+      - name: Wait for build to start
+        shell: bash
+        run: |
+          for i in {1..360}; do
+            BUILD_URL=$(curl -sS --fail --user "$JU:$JT" "${QUEUE_URL}api/json" | jq -r '.executable.url // empty')
+            [ -n "$BUILD_URL" ] && break
+            sleep 10
+          done
+          [ -z "$BUILD_URL" ] && { echo "Build did not start"; exit 1; }
+          echo "BUILD_URL=$BUILD_URL" >> "$GITHUB_ENV"
+          echo "Jenkins build: $BUILD_URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for result
+        shell: bash
+        run: |
+          while true; do
+            status=$(curl -sS --fail --user "$JU:$JT" "${BUILD_URL}api/json" \
+              | jq -r 'if .building then "RUNNING" else (.result // "UNKNOWN") end')
+            echo "$status"
+            [ "$status" != "RUNNING" ] && break
+            sleep 60
+          done
+          [ "$status" = "SUCCESS" ]
+
+      - name: Cancel Jenkins build
+        if: cancelled()
+        shell: bash
+        run: |
+          [ -n "${BUILD_URL:-}" ] && curl -sS --user "$JU:$JT" -X POST "${BUILD_URL}stop" -o /dev/null || true
