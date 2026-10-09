@@ -46,13 +46,13 @@ untime.exe" -ArgumentList "/install","/quiet","/norestart" -Wait -PassThru
           Write-Host "Found: $($exe.FullName)"
           "TC_EXE=$($exe.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
-      - name: Open TestComplete (no arguments)
+      - name: Open TestComplete (with access key)
         continue-on-error: true
         shell: powershell
         env:
           TC_KEY: "a_9fc9dc45-f5c7-42bb-be30-510a0c13d507"
         run: |
-          $p = Start-Process -FilePath $env:TC_EXE -PassThru
+          $p = Start-Process -FilePath $env:TC_EXE -ArgumentList "/AccessKey:$env:TC_KEY" -PassThru
           Start-Sleep -Seconds 60
           $p.Refresh()
           if ($p.HasExited) { throw "TestComplete exited with code $($p.ExitCode)" }
