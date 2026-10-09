@@ -39,7 +39,11 @@ jobs:
       - name: Locate TestComplete.exe
         shell: powershell
         run: |
-          $exe = Get-ChildItem "C:\Program Files (x86)\SmartBear", "C:\Program Files\SmartBear" -Recurse -Filter TestComplete.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          $all = @(Get-ChildItem "C:\Program Files (x86)\SmartBear", "C:\Program Files\SmartBear" -Recurse -Filter TestComplete.exe -ErrorAction SilentlyContinue)
+          Write-Host "All TestComplete.exe found:"
+          $all | ForEach-Object { Write-Host "  $($_.FullName)  ($($_.VersionInfo.FileVersion))" }
+          $exe = $all | Where-Object { $_.FullName -like '*\x64\Bin\*' } | Select-Object -First 1
+          if (-not $exe) { $exe = $all | Select-Object -First 1 }
           if (-not $exe) { throw "TestComplete.exe not found after install" }
           Write-Host "Found: $($exe.FullName)"
           "TC_EXE=$($exe.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
@@ -63,7 +67,7 @@ jobs:
           for %%F in ("%TC_EXE%") do set "TC_DIR=%%~dpF"
           echo Working dir: %TC_DIR%
           start "" /D "%TC_DIR%" "%TC_EXE%" /AccessKey:%TC_KEY%
-          timeout /t 30 /nobreak >nul
+          ping -n 31 127.0.0.1 >nul
           tasklist /FI "IMAGENAME eq TestComplete.exe"
 
       - name: Check TestComplete is running
@@ -142,7 +146,11 @@ jobs:
           $ProgressPreference = 'SilentlyContinue'
           Invoke-WebRequest -Uri "${{ inputs.testexecute_url }}" -OutFile ".\TE.exe"
           cmd /c ".\TE.exe -SilentInstall"
-          $te = Get-ChildItem "C:\Program Files (x86)\SmartBear", "C:\Program Files\SmartBear" -Recurse -Filter TestExecute.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          $all = @(Get-ChildItem "C:\Program Files (x86)\SmartBear", "C:\Program Files\SmartBear" -Recurse -Filter TestExecute.exe -ErrorAction SilentlyContinue)
+          Write-Host "All TestExecute.exe found:"
+          $all | ForEach-Object { Write-Host "  $($_.FullName)  ($($_.VersionInfo.FileVersion))" }
+          $te = $all | Where-Object { $_.FullName -like '*\x64\Bin\*' } | Select-Object -First 1
+          if (-not $te) { $te = $all | Select-Object -First 1 }
           if (-not $te) { throw "TestExecute.exe not found after install" }
           Write-Host "Found: $($te.FullName)"
           "TE_EXE=$($te.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
