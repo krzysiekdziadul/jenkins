@@ -34,8 +34,10 @@ jobs:
 
       - name: Open TestComplete
         shell: powershell
+        env:
+          TC_KEY: "WKLEJ_TUTAJ_KLUCZ"
         run: |
-          $p = Start-Process -FilePath $env:TC_EXE -PassThru
+          $p = Start-Process -FilePath $env:TC_EXE -ArgumentList "/AccessKey:$env:TC_KEY" -PassThru
           Start-Sleep -Seconds 60
           $p.Refresh()
           if ($p.HasExited) { throw "TestComplete exited with code $($p.ExitCode)" }
