@@ -7,10 +7,6 @@ on:
         required: false
         default: "https://downloads.smartbear.com/TestComplete1584SLM.exe"
         type: string
-      testexecute_url:
-        required: false
-        default: "https://downloads.smartbear.com/TestExecute1584SLM.exe"
-        type: string
 
 jobs:
   install-and-open:
@@ -50,10 +46,20 @@ jobs:
         env:
           TC_KEY: "a_9fc9dc45-f5c7-42bb-be30-510a0c13d507"
         run: |
+          $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+          $isAdmin = (New-Object Security.Principal.WindowsPrincipal $id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+          Write-Host "User: $($id.Name), elevated: $isAdmin"
+
           $p = Start-Process -FilePath $env:TC_EXE -ArgumentList "/AccessKey:$env:TC_KEY" -PassThru
-          Start-Sleep -Seconds 60
+          Start-Sleep -Seconds 30
           $p.Refresh()
-          if ($p.HasExited) { throw "TestComplete exited with code $($p.ExitCode)" }
+          if ($p.HasExited) {
+            Write-Host "Normal start exited with code $($p.ExitCode). Retrying as administrator..."
+            $p = Start-Process -FilePath $env:TC_EXE -ArgumentList "/AccessKey:$env:TC_KEY" -Verb RunAs -PassThru
+            Start-Sleep -Seconds 30
+            $p.Refresh()
+            if ($p.HasExited) { throw "TestComplete (admin) exited with code $($p.ExitCode)" }
+          }
           Write-Host "TestComplete is running. PID=$($p.Id), MainWindowTitle='$($p.MainWindowTitle)'"
 
       - name: Screenshot
@@ -70,41 +76,11 @@ jobs:
         if: always()
         shell: powershell
         run: |
+          Write-Host "--- dotnet runtimes ---"
+          dotnet --list-runtimes
+          Write-Host "--- application errors ---"
           Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2} -MaxEvents 15 -ErrorAction SilentlyContinue |
             Format-List TimeCreated, ProviderName, Message
-
-      - name: Install TestExecute
-        shell: powershell
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri "${{ inputs.testexecute_url }}" -OutFile ".\TE.exe"
-          cmd /c ".\TE.exe -SilentInstall"
-          $te = Get-ChildItem "C:\Program Files (x86)\SmartBear", "C:\Program Files\SmartBear" -Recurse -Filter TestExecute.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $te) { throw "TestExecute.exe not found after install" }
-          Write-Host "Found: $($te.FullName)"
-          "TE_EXE=$($te.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
-
-      - name: Open TestExecute with access key
-        continue-on-error: true
-        shell: powershell
-        env:
-          TC_KEY: "WKLEJ_TUTAJ_KLUCZ"
-        run: |
-          $p = Start-Process -FilePath $env:TE_EXE -ArgumentList "/AccessKey:$env:TC_KEY" -PassThru
-          Start-Sleep -Seconds 60
-          $p.Refresh()
-          if ($p.HasExited) { throw "TestExecute exited with code $($p.ExitCode)" }
-          Write-Host "TestExecute is running. PID=$($p.Id)"
-
-      - name: Screenshot 2
-        if: always()
-        shell: powershell
-        run: |
-          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-          $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
-          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
-          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
-          $bmp.Save("$PWD\screen2.png")
 
       - name: Upload screenshots
         if: always()
