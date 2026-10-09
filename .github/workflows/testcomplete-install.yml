@@ -39,6 +39,8 @@ jobs:
       - name: Open TestComplete (no arguments)
         continue-on-error: true
         shell: powershell
+        env:
+          TC_KEY: "a_9fc9dc45-f5c7-42bb-be30-510a0c13d507"
         run: |
           $p = Start-Process -FilePath $env:TC_EXE -PassThru
           Start-Sleep -Seconds 60
