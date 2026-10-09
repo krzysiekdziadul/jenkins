@@ -1,0 +1,60 @@
+name: TestComplete install check
+
+on:
+  workflow_dispatch:
+    inputs:
+      testcomplete_url:
+        required: false
+        default: "https://downloads.smartbear.com/TestComplete1584SLM.exe"
+        type: string
+
+jobs:
+  install-and-open:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Download TestComplete
+        shell: powershell
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri "${{ inputs.testcomplete_url }}" -OutFile ".\TC.exe"
+          Get-Item .\TC.exe | Format-List Name, Length
+
+      - name: Install TestComplete (silent)
+        shell: cmd
+        run: .\TC.exe -SilentInstall
+
+      - name: Locate TestComplete.exe
+        shell: powershell
+        run: |
+          $exe = Get-ChildItem "C:\Program Files (x86)\SmartBear", "C:\Program Files\SmartBear" -Recurse -Filter TestComplete.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $exe) { throw "TestComplete.exe not found after install" }
+          Write-Host "Found: $($exe.FullName)"
+          "TC_EXE=$($exe.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Open TestComplete
+        shell: powershell
+        run: |
+          $p = Start-Process -FilePath $env:TC_EXE -PassThru
+          Start-Sleep -Seconds 60
+          $p.Refresh()
+          if ($p.HasExited) { throw "TestComplete exited with code $($p.ExitCode)" }
+          Write-Host "TestComplete is running. PID=$($p.Id), MainWindowTitle='$($p.MainWindowTitle)'"
+          Get-Process | Where-Object { $_.Name -like 'TestComplete*' } | Format-Table Name, Id, MainWindowTitle
+
+      - name: Screenshot
+        if: always()
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("$PWD\screen.png")
+
+      - name: Upload screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot
+          path: screen.png
