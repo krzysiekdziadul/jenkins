@@ -99,14 +99,14 @@ jobs:
           pip install -r requirements-test.txt
           python -c "import robot; print('Robot Framework', robot.__version__)"
 
-      - name: Run test TC_T1018 (create new project by entry point)
+      - name: Run tests from tests/create_new_project (T1018, T1020, T1021, T1022)
         env:
           TC_KEY: "a_9fc9dc45-f5c7-42bb-be30-510a0c13d507"
         run: |
           # make "TestComplete" resolve to the x64 binary chosen in the verify step
           $env:PATH = "$(Split-Path $env:TC_EXE);$env:PATH"
           Write-Host "TestComplete used by Robot: $env:TC_EXE"
-          robot -v JENKINS_WORKSPACE:"$env:GITHUB_WORKSPACE" -v TC_SLM_KEY:$env:TC_KEY --outputdir results tests/create_new_project/TC_T1018_create_new_project_by_entry-point.robot
+          robot -v JENKINS_WORKSPACE:"$env:GITHUB_WORKSPACE" -v TC_SLM_KEY:$env:TC_KEY --outputdir results tests/create_new_project
 
       - name: Screenshot of the desktop
         if: always()
@@ -122,6 +122,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: robot-results-TC_T1018
+          name: robot-results-create_new_project
           path: results
           if-no-files-found: warn
