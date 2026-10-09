@@ -5,7 +5,7 @@ on:
     inputs:
       testcomplete_url:
         required: false
-        default: "https://downloads.smartbear.com/TestComplete1585SLM.exe"
+        default: "https://downloads.smartbear.com/TestComplete1584SLM.exe"
         type: string
 
 jobs:
