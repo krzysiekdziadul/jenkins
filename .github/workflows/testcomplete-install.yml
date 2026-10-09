@@ -7,6 +7,10 @@ on:
         required: false
         default: "https://downloads.smartbear.com/TestComplete1584SLM.exe"
         type: string
+      testexecute_url:
+        required: false
+        default: "https://downloads.smartbear.com/TestExecute1584SLM.exe"
+        type: string
 
 jobs:
   install-and-open:
@@ -118,3 +122,55 @@ jobs:
         with:
           name: screenshots
           path: screen*.png
+
+  run-testexecute:
+    # separate job = clean machine; runs after the first so two floating licenses are not used at once
+    needs: install-and-open
+    if: ${{ always() }}
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      TC_KEY: "a_9fc9dc45-f5c7-42bb-be30-510a0c13d507"
+      PROJECT: resource\jenkins\jenkins.pjs
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download and install TestExecute
+        shell: powershell
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri "${{ inputs.testexecute_url }}" -OutFile ".\TE.exe"
+          cmd /c ".\TE.exe -SilentInstall"
+          $te = Get-ChildItem "C:\Program Files (x86)\SmartBear", "C:\Program Files\SmartBear" -Recurse -Filter TestExecute.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $te) { throw "TestExecute.exe not found after install" }
+          Write-Host "Found: $($te.FullName)"
+          "TE_EXE=$($te.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Run sample project in TestExecute
+        shell: cmd
+        run: |
+          mkdir logs
+          "%TE_EXE%" "%CD%\%PROJECT%" /r /e /AccessKey:%TC_KEY% /SilentMode /Timeout:1200 /ns /ErrorLog:%CD%\logs\error.log /ExportLog:%CD%\logs\runlog.html /ExportSummary:%CD%\logs\runlog.xml
+          echo TestExecute exit code: %ERRORLEVEL%
+          exit /b %ERRORLEVEL%
+
+      - name: Screenshot
+        if: always()
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("$PWD\te-screen.png")
+
+      - name: Upload TestExecute logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testexecute-logs
+          path: |
+            logs
+            te-screen.png
+          if-no-files-found: warn

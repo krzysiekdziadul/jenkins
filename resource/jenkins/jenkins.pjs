@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Root signature="{24B6FA0B-0143-461A-9758-AEB9E9A9428B}" version="15.0" key="{698E3BE6-A077-41E3-81D0-F9EC0933590A}">
+	<children>
+		<child name="jenkins" key="{AB219D29-4D59-4E4B-A0BF-A20E99B71D22}" path="jenkins\jenkins.mds" />
+	</children>
+	<testItems key="{77DCCA12-242C-4142-A82A-3993FF511964}">
+		<children>
+			<testItem key="{AB219D29-4D59-4E4B-A0BF-A20E99B71D22}" enabled="True" timeout="0" stopOnError="True" description="" />
+		</children>
+	</testItems>
+	<variables key="{16DF7283-72B4-471B-9DE0-A0271F62388A}" />
+	<analysis key="{EA97AB9D-EAE9-4372-A830-9AB85FE80F77}" />
+	<scc key="{00000000-0000-0000-0000-000000000000}" name="">
+		<data />
+	</scc>
+</Root>
