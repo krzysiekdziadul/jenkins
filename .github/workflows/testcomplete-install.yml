@@ -24,6 +24,16 @@ jobs:
           Invoke-WebRequest -Uri "${{ inputs.testcomplete_url }}" -OutFile ".\TC.exe"
           Get-Item .\TC.exe | Format-List Name, Length
 
+      - name: Install .NET Desktop Runtime 8
+        shell: powershell
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri "https://builds.dotnet.microsoft.com/dotnet/WindowsDesktop/8.0.27/windowsdesktop-runtime-8.0.27-win-x64.exe" -OutFile ".
+untime.exe"
+          $r = Start-Process -FilePath ".
+untime.exe" -ArgumentList "/install","/quiet","/norestart" -Wait -PassThru
+          Write-Host "Runtime installer exit code: $($r.ExitCode)"
+
       - name: Install TestComplete (silent)
         shell: cmd
         run: .\TC.exe -SilentInstall
@@ -36,13 +46,13 @@ jobs:
           Write-Host "Found: $($exe.FullName)"
           "TC_EXE=$($exe.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
-      - name: Open TestComplete (no arguments)
+      - name: Open TestComplete (with access key)
         continue-on-error: true
         shell: powershell
         env:
           TC_KEY: "a_9fc9dc45-f5c7-42bb-be30-510a0c13d507"
         run: |
-          $p = Start-Process -FilePath $env:TC_EXE -PassThru
+          $p = Start-Process -FilePath $env:TC_EXE -ArgumentList "/AccessKey:$env:TC_KEY" -PassThru
           Start-Sleep -Seconds 60
           $p.Refresh()
           if ($p.HasExited) { throw "TestComplete exited with code $($p.ExitCode)" }
