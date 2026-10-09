@@ -1,0 +1,86 @@
+name: Install Chrome and TestComplete
+
+on:
+  workflow_dispatch:
+    inputs:
+      testcomplete_url:
+        required: false
+        default: "https://downloads.smartbear.com/TestComplete1584SLM.exe"
+        type: string
+
+jobs:
+  install:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Ensure Chrome is installed
+        run: |
+          $paths = "C:\Program Files\Google\Chrome\Application\chrome.exe", "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+          $chrome = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $chrome) {
+            Write-Host "Chrome not found, installing..."
+            choco install googlechrome -y --no-progress
+            $chrome = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $chrome) { throw "Chrome not found after install" }
+          Write-Host "Chrome: $chrome  ($((Get-Item $chrome).VersionInfo.ProductVersion))"
+
+      - name: Disable Chrome updates, first-run and promo dialogs (policies)
+        run: |
+          $c = "HKLM:\SOFTWARE\Policies\Google\Chrome"
+          New-Item -Path $c -Force | Out-Null
+          $dword = @{
+            DefaultBrowserSettingEnabled = 0
+            MetricsReportingEnabled      = 0
+            BrowserSignin                = 0
+            SyncDisabled                 = 1
+            PromotionalTabsEnabled       = 0
+            BackgroundModeEnabled        = 0
+            ChromeCleanupEnabled         = 0
+            PasswordManagerEnabled       = 0
+          }
+          foreach ($k in $dword.Keys) { Set-ItemProperty -Path $c -Name $k -Value $dword[$k] -Type DWord }
+          $u = "HKLM:\SOFTWARE\Policies\Google\Update"
+          New-Item -Path $u -Force | Out-Null
+          Set-ItemProperty -Path $u -Name AutoUpdateCheckPeriodMinutes -Value 0 -Type DWord
+          Set-ItemProperty -Path $u -Name UpdateDefault -Value 0 -Type DWord
+          Set-ItemProperty -Path $u -Name "Update{8A69D345-D564-463C-AFF1-A69D9E530F96}" -Value 0 -Type DWord
+          Get-Service gupdate, gupdatem -ErrorAction SilentlyContinue | ForEach-Object { Stop-Service $_ -Force -ErrorAction SilentlyContinue; Set-Service $_.Name -StartupType Disabled -ErrorAction SilentlyContinue }
+          Get-ScheduledTask -TaskName "GoogleUpdate*" -ErrorAction SilentlyContinue | Disable-ScheduledTask -ErrorAction SilentlyContinue | Out-Null
+
+      - name: Install .NET Desktop Runtime 8
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri "https://builds.dotnet.microsoft.com/dotnet/WindowsDesktop/8.0.27/windowsdesktop-runtime-8.0.27-win-x64.exe" -OutFile ".\runtime.exe"
+          $r = Start-Process -FilePath ".\runtime.exe" -ArgumentList "/install","/quiet","/norestart" -Wait -PassThru
+          Write-Host "Runtime installer exit code: $($r.ExitCode)"
+
+      - name: Download TestComplete
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri "${{ inputs.testcomplete_url }}" -OutFile ".\TC.exe"
+          Get-Item .\TC.exe | Format-List Name, Length
+
+      - name: Install TestComplete (silent)
+        run: |
+          $p = Start-Process -FilePath ".\TC.exe" -ArgumentList "-SilentInstall" -PassThru
+          if (-not $p.WaitForExit(30 * 60 * 1000)) { $p.Kill(); throw "TestComplete installer did not finish in 30 minutes" }
+          Write-Host "TestComplete installer exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { throw "TestComplete installation failed (exit code $($p.ExitCode))" }
+
+      - name: Verify installation (nothing is started)
+        run: |
+          $all = @(Get-ChildItem "C:\Program Files (x86)\SmartBear", "C:\Program Files\SmartBear" -Recurse -Filter TestComplete.exe -ErrorAction SilentlyContinue)
+          Write-Host "All TestComplete.exe found:"
+          $all | ForEach-Object { Write-Host "  $($_.FullName)  ($($_.VersionInfo.FileVersion))" }
+          $exe = $all | Where-Object { $_.FullName -like '*\x64\Bin\*' } | Select-Object -First 1
+          if (-not $exe) { $exe = $all | Select-Object -First 1 }
+          if (-not $exe) { throw "TestComplete.exe not found after install" }
+          Write-Host "TestComplete (use this one - x64 preferred): $($exe.FullName)"
+          "TC_EXE=$($exe.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe", "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" | Where-Object { Test-Path $_ } | Select-Object -First 1
+          Write-Host "Chrome: $chrome"
+          Get-Process chrome, TestComplete -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "WARNING: running process $($_.Name)" }
