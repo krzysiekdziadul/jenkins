@@ -40,34 +40,27 @@ jobs:
           Write-Host "Found: $($exe.FullName)"
           "TC_EXE=$($exe.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
-      - name: Enable crash dumps
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force C:\dumps | Out-Null
-          $k = "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps"
-          New-Item -Path $k -Force | Out-Null
-          Set-ItemProperty -Path $k -Name DumpFolder -Value "C:\dumps"
-          Set-ItemProperty -Path $k -Name DumpType -Value 2 -Type DWord
-          Set-ItemProperty -Path $k -Name DumpCount -Value 5 -Type DWord
-
-      - name: Open TestComplete via cmd start
+      - name: Open TestComplete (with access key)
         continue-on-error: true
-        shell: cmd
+        shell: powershell
         env:
           TC_KEY: "a_9fc9dc45-f5c7-42bb-be30-510a0c13d507"
         run: |
-          for %%F in ("%TC_EXE%") do set "TC_DIR=%%~dpF"
-          echo Working dir: %TC_DIR%
-          start "" /D "%TC_DIR%" "%TC_EXE%" /AccessKey:%TC_KEY%
-          timeout /t 30 /nobreak >nul
-          tasklist /FI "IMAGENAME eq TestComplete.exe"
+          $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+          $isAdmin = (New-Object Security.Principal.WindowsPrincipal $id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+          Write-Host "User: $($id.Name), elevated: $isAdmin"
 
-      - name: Check TestComplete is running
-        shell: powershell
-        run: |
-          $p = Get-Process TestComplete -ErrorAction SilentlyContinue
-          if (-not $p) { throw "TestComplete is not running (crashed after start)" }
-          Write-Host "TestComplete is running. PID=$($p.Id)"
+          $p = Start-Process -FilePath $env:TC_EXE -ArgumentList "/AccessKey:$env:TC_KEY" -PassThru
+          Start-Sleep -Seconds 30
+          $p.Refresh()
+          if ($p.HasExited) {
+            Write-Host "Normal start exited with code $($p.ExitCode). Retrying as administrator..."
+            $p = Start-Process -FilePath $env:TC_EXE -ArgumentList "/AccessKey:$env:TC_KEY" -Verb RunAs -PassThru
+            Start-Sleep -Seconds 30
+            $p.Refresh()
+            if ($p.HasExited) { throw "TestComplete (admin) exited with code $($p.ExitCode)" }
+          }
+          Write-Host "TestComplete is running. PID=$($p.Id), MainWindowTitle='$($p.MainWindowTitle)'"
 
       - name: Wait 60 seconds for TestComplete to load
         shell: powershell
@@ -92,25 +85,6 @@ jobs:
           Write-Host "--- application errors ---"
           Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2} -MaxEvents 15 -ErrorAction SilentlyContinue |
             Format-List TimeCreated, ProviderName, Message
-
-      - name: Collect dumps and TestComplete logs
-        if: always()
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force collected | Out-Null
-          if (Test-Path C:\dumps) { Copy-Item C:\dumps collected\dumps -Recurse -Force }
-          foreach ($d in "$env:LOCALAPPDATA\SmartBear", "$env:APPDATA\SmartBear", "$env:ProgramData\SmartBear") {
-            if (Test-Path $d) { Copy-Item $d ("collected\" + ($d -replace '[:\]','_')) -Recurse -Force -ErrorAction SilentlyContinue }
-          }
-          Get-ChildItem collected -Recurse -File | Select-Object FullName, Length | Format-Table -AutoSize
-
-      - name: Upload dumps and logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dumps-and-logs
-          path: collected
-          retention-days: 7
 
       - name: Upload screenshots
         if: always()
