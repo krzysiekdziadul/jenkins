@@ -1,0 +1,100 @@
+name: Chrome open and screenshot
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        required: false
+        default: "https://www.google.com"
+        type: string
+
+jobs:
+  chrome:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Ensure Chrome is installed
+        run: |
+          $paths = "C:\Program Files\Google\Chrome\Application\chrome.exe", "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+          $chrome = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $chrome) {
+            Write-Host "Chrome not found, installing..."
+            choco install googlechrome -y --no-progress
+            $chrome = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $chrome) { throw "Chrome not found after install" }
+          Write-Host "Chrome: $chrome  ($((Get-Item $chrome).VersionInfo.ProductVersion))"
+          "CHROME_EXE=$chrome" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Disable Chrome updates, first-run and promo dialogs (policies)
+        run: |
+          # Chrome policies
+          $c = "HKLM:\SOFTWARE\Policies\Google\Chrome"
+          New-Item -Path $c -Force | Out-Null
+          $dword = @{
+            DefaultBrowserSettingEnabled = 0   # no "make default browser" prompt
+            MetricsReportingEnabled      = 0   # no usage stats prompt
+            BrowserSignin                = 0   # no sign-in prompt
+            SyncDisabled                 = 1
+            PromotionalTabsEnabled       = 0   # no welcome / promo tabs
+            ShowFullUrlsInAddressBar     = 1
+            HideWebStoreIcon             = 1
+            BackgroundModeEnabled        = 0
+            ChromeCleanupEnabled         = 0
+            AutofillCreditCardEnabled    = 0
+            PasswordManagerEnabled       = 0
+          }
+          foreach ($k in $dword.Keys) { Set-ItemProperty -Path $c -Name $k -Value $dword[$k] -Type DWord }
+
+          # Google Update policies: never auto-update, no update checks
+          $u = "HKLM:\SOFTWARE\Policies\Google\Update"
+          New-Item -Path $u -Force | Out-Null
+          Set-ItemProperty -Path $u -Name AutoUpdateCheckPeriodMinutes -Value 0 -Type DWord
+          Set-ItemProperty -Path $u -Name UpdateDefault -Value 0 -Type DWord
+          Set-ItemProperty -Path $u -Name "Update{8A69D345-D564-463C-AFF1-A69D9E530F96}" -Value 0 -Type DWord
+
+          # stop Google Update services/tasks so no updater window or restart prompt can appear
+          Get-Service gupdate, gupdatem -ErrorAction SilentlyContinue | ForEach-Object { Stop-Service $_ -Force -ErrorAction SilentlyContinue; Set-Service $_.Name -StartupType Disabled -ErrorAction SilentlyContinue }
+          Get-ScheduledTask -TaskName "GoogleUpdate*" -ErrorAction SilentlyContinue | Disable-ScheduledTask -ErrorAction SilentlyContinue | Out-Null
+
+      - name: Open Chrome
+        run: |
+          $profile = Join-Path $env:RUNNER_TEMP "chrome-profile"
+          $chromeArgs = @(
+            "--user-data-dir=$profile",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-component-update",
+            "--disable-background-networking",
+            "--disable-sync",
+            "--disable-features=Translate,InfobarsEnabled,ChromeWhatsNewUI",
+            "--disable-infobars",
+            "--disable-notifications",
+            "--password-store=basic",
+            "--start-maximized",
+            "${{ inputs.url }}"
+          )
+          $p = Start-Process -FilePath $env:CHROME_EXE -ArgumentList $chromeArgs -PassThru
+          Start-Sleep -Seconds 20
+          $running = Get-Process chrome -ErrorAction SilentlyContinue
+          if (-not $running) { throw "Chrome is not running" }
+          Write-Host "Chrome is running, processes: $($running.Count)"
+
+      - name: Screenshot
+        if: always()
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("$PWD\chrome-screen.png")
+
+      - name: Upload screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrome-screenshot
+          path: chrome-screen.png
