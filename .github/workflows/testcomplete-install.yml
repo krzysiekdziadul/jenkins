@@ -28,10 +28,8 @@ jobs:
         shell: powershell
         run: |
           $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri "https://builds.dotnet.microsoft.com/dotnet/WindowsDesktop/8.0.27/windowsdesktop-runtime-8.0.27-win-x64.exe" -OutFile ".
-untime.exe"
-          $r = Start-Process -FilePath ".
-untime.exe" -ArgumentList "/install","/quiet","/norestart" -Wait -PassThru
+          Invoke-WebRequest -Uri "https://builds.dotnet.microsoft.com/dotnet/WindowsDesktop/8.0.27/windowsdesktop-runtime-8.0.27-win-x64.exe" -OutFile ".\runtime.exe"
+          $r = Start-Process -FilePath ".\runtime.exe" -ArgumentList "/install","/quiet","/norestart" -Wait -PassThru
           Write-Host "Runtime installer exit code: $($r.ExitCode)"
 
       - name: Install TestComplete (silent)
