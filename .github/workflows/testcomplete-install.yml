@@ -100,7 +100,7 @@ jobs:
           New-Item -ItemType Directory -Force collected | Out-Null
           if (Test-Path C:\dumps) { Copy-Item C:\dumps collected\dumps -Recurse -Force }
           foreach ($d in "$env:LOCALAPPDATA\SmartBear", "$env:APPDATA\SmartBear", "$env:ProgramData\SmartBear") {
-            if (Test-Path $d) { Copy-Item $d ("collected\" + ($d -replace '[:\]','_')) -Recurse -Force -ErrorAction SilentlyContinue }
+            if (Test-Path $d) { Copy-Item $d ("collected\" + ($d -replace '[:\\]','_')) -Recurse -Force -ErrorAction SilentlyContinue }
           }
           Get-ChildItem collected -Recurse -File | Select-Object FullName, Length | Format-Table -AutoSize
 
