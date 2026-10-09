@@ -4,7 +4,10 @@ Library     FlaUILibrary
 # Keywords
 Resource    ../keywords/common.robot
 Resource    ../keywords/assertions.robot
+Resource    ../keywords/click.robot
 # Selectors
+Resource    ../resources/selectors/menu_bar.robot
+Resource    ../resources/selectors/start_page.robot
 Resource    ../resources/selectors/toolbar.robot
 Resource    ../resources/selectors/new_project_window.robot
 Resource    ../resources/selectors/title_bar.robot
