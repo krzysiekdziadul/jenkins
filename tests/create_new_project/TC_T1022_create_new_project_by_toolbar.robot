@@ -27,4 +27,5 @@ Create New Project from "New" button on Toolbar
     Launch TestComplete    ${UIA}
     Create New Project from    Toolbar "New Project" Button    ${TC_PROJECT}
     Verify Project is created    ${TC_PROJECT}
-    Verify Elements Are Enabled    @{ELEMENTS}
+    # INTENTIONAL FAILURE (demo): title bar will not contain this name
+    Verify Project is created    TC-WRONG-NAME-EXPECTED-TO-FAIL
