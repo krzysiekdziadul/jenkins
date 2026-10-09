@@ -46,10 +46,20 @@ jobs:
         env:
           TC_KEY: "a_9fc9dc45-f5c7-42bb-be30-510a0c13d507"
         run: |
+          $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+          $isAdmin = (New-Object Security.Principal.WindowsPrincipal $id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+          Write-Host "User: $($id.Name), elevated: $isAdmin"
+
           $p = Start-Process -FilePath $env:TC_EXE -ArgumentList "/AccessKey:$env:TC_KEY" -PassThru
-          Start-Sleep -Seconds 60
+          Start-Sleep -Seconds 30
           $p.Refresh()
-          if ($p.HasExited) { throw "TestComplete exited with code $($p.ExitCode)" }
+          if ($p.HasExited) {
+            Write-Host "Normal start exited with code $($p.ExitCode). Retrying as administrator..."
+            $p = Start-Process -FilePath $env:TC_EXE -ArgumentList "/AccessKey:$env:TC_KEY" -Verb RunAs -PassThru
+            Start-Sleep -Seconds 30
+            $p.Refresh()
+            if ($p.HasExited) { throw "TestComplete (admin) exited with code $($p.ExitCode)" }
+          }
           Write-Host "TestComplete is running. PID=$($p.Id), MainWindowTitle='$($p.MainWindowTitle)'"
 
       - name: Screenshot
