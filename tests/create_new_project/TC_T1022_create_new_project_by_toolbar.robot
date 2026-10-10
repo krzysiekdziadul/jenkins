@@ -26,6 +26,7 @@ Create New Project from "New" button on Toolbar
     [Tags]    new_project
     Launch TestComplete    ${UIA}
     Create New Project from    Toolbar "New Project" Button    ${TC_PROJECT}
+    # INTENTIONAL FAILURE (demo): click on a non-existing element to check that Robot takes a screenshot
+    Click    identifier=//Button[@Name='FAKE_BUTTON_DOES_NOT_EXIST']
     Verify Project is created    ${TC_PROJECT}
-    # INTENTIONAL FAILURE (demo): title bar will not contain this name
-    Verify Project is created    TC-WRONG-NAME-EXPECTED-TO-FAIL
+    Verify Elements Are Enabled    @{ELEMENTS}
