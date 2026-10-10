@@ -123,5 +123,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: robot-results-create_new_project
-          path: results
+          path: |
+            results
+            *.jpg
+            *.png
           if-no-files-found: warn
