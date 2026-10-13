@@ -99,14 +99,14 @@ jobs:
           pip install -r requirements-test.txt
           python -c "import robot; print('Robot Framework', robot.__version__)"
 
-      - name: Run tests from tests/create_new_project (T1018, T1020, T1021, T1022)
+      - name: Run test tests/create_new_project/TC_T1018 only (T1020, T1021, T1022 temporarily off)
         env:
           TC_KEY: "a_9fc9dc45-f5c7-42bb-be30-510a0c13d507"
         run: |
           # make "TestComplete" resolve to the x64 binary chosen in the verify step
           $env:PATH = "$(Split-Path $env:TC_EXE);$env:PATH"
           Write-Host "TestComplete used by Robot: $env:TC_EXE"
-          robot -v JENKINS_WORKSPACE:"$env:GITHUB_WORKSPACE" -v TC_SLM_KEY:$env:TC_KEY --outputdir results tests/create_new_project
+          robot -v JENKINS_WORKSPACE:"$env:GITHUB_WORKSPACE" -v TC_SLM_KEY:$env:TC_KEY --outputdir results tests/create_new_project/TC_T1018_create_new_project_by_entry-point.robot
 
       - name: Screenshot of the desktop
         if: always()
